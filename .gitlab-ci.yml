@@ -2,11 +2,14 @@
 # secure:  scan every pinned self-hosted AI image and package; fail when policy says so.
 #          A failed pipeline is what fires the AI Stack Guard flow (AI > Triggers, "Pipeline events: Failed").
 # verify:  the tool's own tests.
-# release: when a merged fix adds a stack-changes/ entry on the default branch, tag a release from it.
+# package: on the default branch, publish the stack as it now stands (CycloneDX SBOM with its open
+#          advisories, plus the scan report) to the project's package registry as stack-<pipeline IID>.
+# release: when a merged fix adds a stack-changes/ entry on the default branch, tag a release from it
+#          that links that package.
 # monitor: add a weekly pipeline schedule (Build > Pipeline schedules); new advisories then fail it
 #          even when nothing in the repo changed.
 
-stages: [secure, verify, release]
+stages: [secure, verify, package, release]
 
 ai-stack-scan:
   stage: secure
@@ -39,15 +42,36 @@ unit-tests:
   before_script:
     - apt-get update -qq && apt-get install -y -qq git > /dev/null
   script:
-    - python3 -m unittest -v test_guard.py
+    - python3 -m unittest -v test_guard.py test_mcp_server.py test_api_ship.py test_sbom.py
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "schedule"
 
+# Runs even when the scan fails: the SBOM records what is deployed, open advisories included.
+ai-stack-package:
+  stage: package
+  image: python:3.12-slim
+  needs:
+    - job: ai-stack-scan
+      artifacts: true
+  script:
+    - python3 guard/sbom.py build
+    - python3 guard/sbom.py publish --package-version "stack-$CI_PIPELINE_IID"
+  artifacts:
+    expire_in: 90 days
+    paths:
+      - gl-sbom-ai-stack.cdx.json
+      - .ai-stack-guard/package.json
+    reports:
+      cyclonedx: gl-sbom-ai-stack.cdx.json
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      when: always
+
 stack-release:
   stage: release
   image: registry.gitlab.com/gitlab-org/cli:latest
-  needs: []
+  needs: [ai-stack-package]
   script:
     - ls stack-changes/*.md | sort | tail -n 1 | xargs cat > release-notes.md
     - cat release-notes.md
@@ -56,6 +80,14 @@ stack-release:
     name: "Stack update $CI_PIPELINE_IID"
     description: ./release-notes.md
     ref: $CI_COMMIT_SHA
+    assets:
+      links:
+        - name: "AI stack SBOM (CycloneDX)"
+          url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/ai-stack-sbom/stack-$CI_PIPELINE_IID/gl-sbom-ai-stack.cdx.json"
+          link_type: package
+        - name: "Scan report"
+          url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/ai-stack-sbom/stack-$CI_PIPELINE_IID/ai-stack-report.md"
+          link_type: other
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
       changes:

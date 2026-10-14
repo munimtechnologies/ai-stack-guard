@@ -13,17 +13,21 @@ Built for GitLab's *Life After Code* hackathon (Path A: Start Fresh), aiming at 
 
 ## What happens, stage by stage
 
+It touches all nine DevSecOps stages: plan, create, verify, package, secure, release, configure, monitor and govern.
+
 | Stage | What AI Stack Guard does |
 |---|---|
 | Secure | The `ai-stack-scan` CI job matches every pinned image and package against curated advisories plus OSV ([ai-stack-advisories](https://github.com/munimv2/ai-stack-advisories)). Findings appear in the merge request Code Quality widget. |
 | Monitor | A weekly pipeline schedule rescans, so new advisories fail the pipeline even when nothing in the repo changed. |
 | Plan | A failed pipeline fires the flow. `guard.py run` turns the findings into an upgrade plan: one exact version edit per line, sorted into an **auto** group and a **review** group by semver size. |
 | Create | The guard agent opens one merge request per group through git push options. If the push is refused, it opens the same merge requests with GitLab's own tools (`create_branch`, `create_commit`, `create_merge_request`). Its first comment carries an evidence table: component, file and line, before, after, advisories fixed, and what is still open. |
-| Verify | Before anything is pushed, the patched files are rescanned. Every patched line must come back clean, and no new line may become affected. |
+| Verify | Before anything is pushed, the patched files are rescanned. Every patched line must come back clean, and no new line may become affected. The tool's own unit tests run in every pipeline. |
 | Govern | A second agent, the reviewer, re-checks each pushed branch from a fresh worktree. It confirms that only the planned lines changed, each to the planned text, and that a rescan is clean. **Only a passed review arms auto-merge.** Advisories with no fixed release become issues with mitigations, and ignores in the policy must carry an expiry date. |
-| Release | When a fix merges, its `stack-changes/` entry becomes a tagged GitLab release. |
+| Package | On every push to the default branch, `ai-stack-package` writes the stack as it now stands as a CycloneDX SBOM (`gl-sbom-ai-stack.cdx.json`): every recognised image and package with its purl and where it is pinned, plus the advisories still open on it and their fixed versions. It publishes the SBOM and the scan report to the project's package registry as `ai-stack-sbom/stack-<pipeline IID>`, and attaches the SBOM as a CycloneDX report. |
+| Release | When a fix merges, its `stack-changes/` entry becomes a tagged GitLab release, linked to that pipeline's SBOM and scan report in the package registry. |
 | Configure | `ai-stack-guard.json` holds the policy; `.gitlab/duo/agent-config.yml` sets up the flow runtime. |
-| Code | `.gitlab/duo/mcp.json` gives GitLab Duo Agentic Chat in your IDE (or the Duo CLI) three read-only MCP tools, so a developer can ask "is our AI stack safe, and what would the guard change?" before pushing. |
+
+A developer can also ask about the stack from the IDE before pushing; see [MCP](#ask-about-it-from-your-ide-mcp) below.
 
 ## The control dial (`ai-stack-guard.json`)
 
@@ -49,7 +53,7 @@ Set `auto_merge` to `none` and every change waits for a human. Leave it at `patc
 ## The demo
 
 `demo/compose.yaml` pins three outdated images on purpose:
-- **Open WebUI 0.11.3 → 0.11.4** is a patch bump. It goes to the auto group: reviewed, then auto-merged when the pipeline passes, then released.
+- **Open WebUI 0.11.3 → 0.11.4** is a patch bump. It goes to the auto group: reviewed, then auto-merged when the pipeline passes, then packaged and released.
 - **vLLM v0.30.0 → v0.31.0** is a 0.x minor bump. It goes to the review group, and the MR explains why it needs a human.
 - **Flowise 3.1.4** has advisories with no fixed release. AI Stack Guard opens one issue per advisory with mitigations, and keeps the pipeline green, because no upgrade can help.
 
@@ -57,11 +61,12 @@ The narration and shot list for the demo video are in [`docs/demo-script.md`](do
 
 ## Set it up on your GitLab project
 
-1. Copy `guard/`, `.gitlab/duo/`, `ai-stack-guard.json` and the `ai-stack-scan` job from `.gitlab-ci.yml`. Add `.ai-stack-guard/` and `.ai-stack-advisories/` to `.gitignore`.
+1. Copy `guard/`, `.gitlab/duo/`, `ai-stack-guard.json` and the `ai-stack-scan`, `ai-stack-package` and `stack-release` jobs from `.gitlab-ci.yml`. Add `.ai-stack-guard/` and `.ai-stack-advisories/` to `.gitignore`.
 2. **AI > Flows > New flow**: paste `.gitlab/duo/flows/ai-stack-guard.yaml` and enable it for the project.
 3. **AI > Triggers > New flow trigger**: add the event *Pipeline events: Failed*, the flow's service account, and the AI Stack Guard flow. Optionally add *Mention*, so `@` the service account in an issue runs it on demand.
 4. **Build > Pipeline schedules**: add a weekly schedule on the default branch.
 5. In the project's merge request settings, allow *Auto-merge* (merge when the pipeline succeeds).
+6. Keep the package registry on (it is by default). The package job uploads with the CI job token, so it needs no extra secret.
 
 Run it locally with Python 3.9 or later and no dependencies:
 
@@ -71,7 +76,8 @@ python3 guard/guard.py scan      # exit 1 when policy says the pipeline should f
 python3 guard/guard.py run       # plan, patch, verify; prints what it would ship
 python3 guard/guard.py ship --dry-run
 python3 guard/api_ship.py        # what the API fallback would commit, without git
-python3 -m unittest -v test_guard.py test_mcp_server.py test_api_ship.py
+python3 guard/sbom.py build      # the CycloneDX SBOM the package job publishes
+python3 -m unittest -v test_guard.py test_mcp_server.py test_api_ship.py test_sbom.py
 ```
 
 ## If GitLab refuses the push
@@ -86,6 +92,16 @@ file, the changelog entry, the commit message and the merge request title and de
 The reviewer checks an API-made branch exactly like a pushed one. Auto-merge is armed with a push
 option, so if pushing is refused there as well, the reviewer still posts its verdict and says the auto
 group waits for a human merge.
+
+## The SBOM
+
+`guard/sbom.py build` reads `.ai-stack-guard/report.json` and writes CycloneDX 1.5:
+
+- **Components:** images become `container` components with a `pkg:docker` purl (`?repository_url=ghcr.io` for other registries); PyPI and npm pins become `library` components. An image pinned in several files is one component with every location listed.
+- **Vulnerabilities:** each open advisory, with severity, aliases (CVE and GHSA links), a recommendation (the fixed versions, or mitigations when no release fixes it yet) and the components it affects.
+- **Decisions:** ignored advisories stay off the open list, but the component records which ones your policy ignores.
+
+Other tools can read it: Dependency-Track, `grype sbom:gl-sbom-ai-stack.cdx.json`, or GitLab's own CycloneDX report handling. Each package version matches a pipeline, so you can see exactly what was deployed after each fix.
 
 ## Ask about it from your IDE (MCP)
 
@@ -109,6 +125,7 @@ To use it, open the project folder in your IDE. In the top-level group, turn on
 
 - It compares versions only; it never connects to your servers. To check exposed ports and settings, see [local-ai-checkup](https://github.com/munimv2/local-ai-checkup).
 - A bumped tag keeps any suffix (such as `-cu128`), and suffixed tags never auto-merge, because the new tag may not exist upstream. Digest-pinned lines are skipped and reported.
+- The SBOM lists only the AI components the scanner recognises, not every image or library in the repository.
 - GitLab only lets humans fire flow triggers. Pipelines started by the flow's own pushes never start it again, so it cannot loop.
 - The MCP tools run where your IDE runs. GitLab documents MCP for the IDE and the Duo CLI, so the flow itself uses the scanner directly.
 
