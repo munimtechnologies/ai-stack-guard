@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch the ai-stack-advisories scanner and its curated data (Apache-2.0, github.com/munimv2/ai-stack-advisories).
+"""Fetch the ai-stack-advisories scanner and its curated data (Apache-2.0, github.com/munimtechnologies/ai-stack-advisories).
 
 Tries GitHub first. Duo flow sandboxes can only reach the GitLab instance, so it falls back to the
 copy the ai-stack-scan CI job keeps as an artifact of this public project.
@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-GITHUB = "https://raw.githubusercontent.com/munimv2/ai-stack-advisories/{ref}/{name}"
+GITHUB = "https://raw.githubusercontent.com/munimtechnologies/ai-stack-advisories/{ref}/{name}"
 ARTIFACT = "{base}/api/v4/projects/{project}/jobs/artifacts/{branch}/raw/{path}?job=ai-stack-scan"
 FILES = ("scan_stack.py", "advisories.json", "LICENSE")
 

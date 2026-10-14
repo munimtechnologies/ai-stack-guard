@@ -11,7 +11,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 if not (HERE / "guard" / "guard.py").is_file():
     # The publish check runs only the changed files in a scratch folder; test them against guard.py on main.
-    url = "https://raw.githubusercontent.com/munimv2/ai-stack-guard/main/guard/guard.py"
+    url = "https://raw.githubusercontent.com/munimtechnologies/ai-stack-guard/main/guard/guard.py"
     (HERE / "guard").mkdir(exist_ok=True)
     with urllib.request.urlopen(url, timeout=30) as resp:
         (HERE / "guard" / "guard.py").write_bytes(resp.read())

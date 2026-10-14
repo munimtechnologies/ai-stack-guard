@@ -17,7 +17,7 @@ It touches all nine DevSecOps stages: plan, create, verify, package, secure, rel
 
 | Stage | What AI Stack Guard does |
 |---|---|
-| Secure | The `ai-stack-scan` CI job matches every pinned image and package against curated advisories plus OSV ([ai-stack-advisories](https://github.com/munimv2/ai-stack-advisories)). Findings appear in the merge request Code Quality widget. |
+| Secure | The `ai-stack-scan` CI job matches every pinned image and package against curated advisories plus OSV ([ai-stack-advisories](https://github.com/munimtechnologies/ai-stack-advisories)). Findings appear in the merge request Code Quality widget. |
 | Monitor | A weekly pipeline schedule rescans, so new advisories fail the pipeline even when nothing in the repo changed. |
 | Plan | A failed pipeline fires the flow. `guard.py run` turns the findings into an upgrade plan: one exact version edit per line, sorted into an **auto** group and a **review** group by semver size. |
 | Create | The guard agent opens one merge request per group through git push options. If the push is refused, it opens the same merge requests with GitLab's own tools (`create_branch`, `create_commit`, `create_merge_request`). Its first comment carries an evidence table: component, file and line, before, after, advisories fixed, and what is still open. |
@@ -123,7 +123,7 @@ To use it, open the project folder in your IDE. In the top-level group, turn on
 
 ## Limits, plainly
 
-- It compares versions only; it never connects to your servers. To check exposed ports and settings, see [local-ai-checkup](https://github.com/munimv2/local-ai-checkup).
+- It compares versions only; it never connects to your servers. To check exposed ports and settings, see [local-ai-checkup](https://github.com/munimtechnologies/local-ai-checkup).
 - A bumped tag keeps any suffix (such as `-cu128`), and suffixed tags never auto-merge, because the new tag may not exist upstream. Digest-pinned lines are skipped and reported.
 - The SBOM lists only the AI components the scanner recognises, not every image or library in the repository.
 - GitLab only lets humans fire flow triggers. Pipelines started by the flow's own pushes never start it again, so it cannot loop.
@@ -131,4 +131,4 @@ To use it, open the project folder in your IDE. In the top-level group, turn on
 
 ## Credits
 
-Made by MV2 of Munim, Inc. The code, flow and text were made with AI agents (Claude) working in his name, and every change it proposes carries the scanner evidence so a reviewer can check it. Advisory data comes from [ai-stack-advisories](https://github.com/munimv2/ai-stack-advisories) and OSV.dev. Apache-2.0 licensed.
+Made by MV2 of Munim, Inc. The code, flow and text were made with AI agents (Claude) working in his name, and every change it proposes carries the scanner evidence so a reviewer can check it. Advisory data comes from [ai-stack-advisories](https://github.com/munimtechnologies/ai-stack-advisories) and OSV.dev. Apache-2.0 licensed.

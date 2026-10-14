@@ -151,7 +151,7 @@ def build(report, project, now=None):
     metadata = {"timestamp": now,
                 "tools": {"components": [{"type": "application", "name": "AI Stack Guard", "version": VERSION,
                                           "externalReferences": [{"type": "vcs",
-                                                                  "url": "https://github.com/munimv2/ai-stack-guard"}]}]},
+                                                                  "url": "https://github.com/munimtechnologies/ai-stack-guard"}]}]},
                 "component": {"type": "application", "bom-ref": "project", "name": project},
                 "properties": [prop("scanDate", report.get("date"))]}
     if report.get("curatedDataAsOf"):
