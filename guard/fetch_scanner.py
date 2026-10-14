@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch the ai-stack-advisories scanner and its curated data (MIT, github.com/munimv2/ai-stack-advisories).
+"""Fetch the ai-stack-advisories scanner and its curated data (Apache-2.0, github.com/munimv2/ai-stack-advisories).
 
 Tries GitHub first. Duo flow sandboxes can only reach the GitLab instance, so it falls back to the
 copy the ai-stack-scan CI job keeps as an artifact of this public project.

@@ -19,4 +19,4 @@ Record only what really happened in the project. If a step fails on GitLab, show
 | 11 | Merged MR, then the tagged release from `stack-changes/` | When the patch merges, its change note becomes a tagged release. Plan, create, verify, secure, release and monitor are all covered by one flow. |
 | 12 | IDE: Duo Agentic Chat answering with the `plan_upgrades` MCP tool | Developers can ask the same questions from their IDE. A small MCP server gives Duo Chat read-only tools to scan the stack and preview the guard's plan. |
 | 13 | `ai-stack-guard.json` | One policy file is the control dial: what fails the pipeline, and how big a bump may merge itself. Set auto-merge to none and every change waits for a human. |
-| 14 | Project page with the MIT license | AI Stack Guard is MIT licensed. It is by MV2 of Munim, Inc., made with AI agents. Thanks for watching. |
+| 14 | Project page with the Apache-2.0 license | AI Stack Guard is Apache-2.0 licensed. It is by MV2 of Munim, Inc., made with AI agents. Thanks for watching. |

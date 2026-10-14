@@ -11,4 +11,4 @@ Flowise has no fixed release yet, so no upgrade can help. The guard opens one is
 When the patch merges, its change note becomes a tagged release. Plan, create, verify, secure, release and monitor are all covered by one flow.
 Developers can ask the same questions from their IDE. A small MCP server gives Duo Chat read-only tools to scan the stack and preview the guard's plan.
 One policy file is the control dial: what fails the pipeline, and how big a bump may merge itself. Set auto-merge to none and every change waits for a human.
-AI Stack Guard is MIT licensed. It is by MV2 of Munim, Inc., made with AI agents. Thanks for watching.
+AI Stack Guard is Apache-2.0 licensed. It is by MV2 of Munim, Inc., made with AI agents. Thanks for watching.

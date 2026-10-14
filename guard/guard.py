@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """AI Stack Guard: scan, patch, verify and ship upgrades for self-hosted AI images and pins.
 
-Wraps the ai-stack-advisories scanner (github.com/munimv2/ai-stack-advisories, MIT). Standard
+Wraps the ai-stack-advisories scanner (github.com/munimv2/ai-stack-advisories, Apache-2.0). Standard
 library only, so it runs in GitLab's default Duo flow image and in any python CI image.
 
   guard.py scan     report JSON + Markdown + GitLab Code Quality report; exit 1 per policy

@@ -131,4 +131,4 @@ To use it, open the project folder in your IDE. In the top-level group, turn on
 
 ## Credits
 
-Made by MV2 of Munim, Inc. The code, flow and text were made with AI agents (Claude) working in his name, and every change it proposes carries the scanner evidence so a reviewer can check it. Advisory data comes from [ai-stack-advisories](https://github.com/munimv2/ai-stack-advisories) and OSV.dev. MIT licensed.
+Made by MV2 of Munim, Inc. The code, flow and text were made with AI agents (Claude) working in his name, and every change it proposes carries the scanner evidence so a reviewer can check it. Advisory data comes from [ai-stack-advisories](https://github.com/munimv2/ai-stack-advisories) and OSV.dev. Apache-2.0 licensed.
