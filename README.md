@@ -18,7 +18,7 @@ Built for GitLab's *Life After Code* hackathon (Path A: Start Fresh), aiming at 
 | Secure | The `ai-stack-scan` CI job matches every pinned image and package against curated advisories plus OSV ([ai-stack-advisories](https://github.com/munimv2/ai-stack-advisories)). Findings appear in the merge request Code Quality widget. |
 | Monitor | A weekly pipeline schedule rescans, so new advisories fail the pipeline even when nothing in the repo changed. |
 | Plan | A failed pipeline fires the flow. `guard.py run` turns the findings into an upgrade plan: one exact version edit per line, sorted into an **auto** group and a **review** group by semver size. |
-| Create | The guard agent opens one merge request per group through git push options. Its first comment carries an evidence table: component, file and line, before, after, advisories fixed, and what is still open. |
+| Create | The guard agent opens one merge request per group through git push options. If the push is refused, it opens the same merge requests with GitLab's own tools (`create_branch`, `create_commit`, `create_merge_request`). Its first comment carries an evidence table: component, file and line, before, after, advisories fixed, and what is still open. |
 | Verify | Before anything is pushed, the patched files are rescanned. Every patched line must come back clean, and no new line may become affected. |
 | Govern | A second agent, the reviewer, re-checks each pushed branch from a fresh worktree. It confirms that only the planned lines changed, each to the planned text, and that a rescan is clean. **Only a passed review arms auto-merge.** Advisories with no fixed release become issues with mitigations, and ignores in the policy must carry an expiry date. |
 | Release | When a fix merges, its `stack-changes/` entry becomes a tagged GitLab release. |
@@ -70,8 +70,22 @@ python3 guard/fetch_scanner.py
 python3 guard/guard.py scan      # exit 1 when policy says the pipeline should fail
 python3 guard/guard.py run       # plan, patch, verify; prints what it would ship
 python3 guard/guard.py ship --dry-run
-python3 -m unittest -v test_guard.py test_mcp_server.py
+python3 guard/api_ship.py        # what the API fallback would commit, without git
+python3 -m unittest -v test_guard.py test_mcp_server.py test_api_ship.py
 ```
+
+## If GitLab refuses the push
+
+The flow's session may not be allowed to push, or GitLab may ignore the push options. Then the guard
+agent runs `guard/api_ship.py`. For each group it writes the branch, the full new text of each changed
+file, the changelog entry, the commit message and the merge request title and description to
+`.ai-stack-guard/api/`. It builds them with the same edit function and the same verified plan as
+`ship`, and it prepares nothing that failed verification. The agent then opens the merge request with
+`create_branch`, `create_commit` and `create_merge_request`, and posts the same evidence comment.
+
+The reviewer checks an API-made branch exactly like a pushed one. Auto-merge is armed with a push
+option, so if pushing is refused there as well, the reviewer still posts its verdict and says the auto
+group waits for a human merge.
 
 ## Ask about it from your IDE (MCP)
 

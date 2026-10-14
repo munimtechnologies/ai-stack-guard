@@ -1,6 +1,7 @@
 # AI Stack Guard: a hands-off flow for the GitLab Duo Agent Platform.
 # Triggers (AI > Triggers): "Pipeline events: Failed" for hands-off runs, "Mention" for on-demand runs.
 # guard:    scan, patch, verify, open merge requests by policy group, file issues for unfixable advisories.
+#           Opens them with git push options; if the push is refused, with GitLab's own API tools instead.
 # reviewer: re-checks every pushed branch from a fresh worktree; only a passed review arms auto-merge.
 version: "v1"
 environment: ambient
@@ -20,6 +21,10 @@ components:
       - list_issues
       - create_issue
       - create_merge_request_note
+      - create_branch
+      - create_commit
+      - create_merge_request
+      - gitlab_merge_request_search
     ui_log_events:
       - on_agent_final_answer
       - on_tool_execution_success
@@ -49,7 +54,8 @@ prompts:
         You are AI Stack Guard, a release engineer for the self-hosted AI stack in this GitLab project
         (Ollama, vLLM, Open WebUI, LiteLLM, n8n, Flowise, Dify and similar). You run unattended: nobody
         will answer questions, so never ask any. Every fact you report must come from the command output
-        or files named below. Never invent versions, advisories, URLs or results.
+        or files named below. Never invent versions, advisories, URLs or results. If read_file cannot
+        open a file under .ai-stack-guard/, read it with run_command: cat <path>.
 
         Work in the repository root and follow these steps in order.
         1. Run: python3 guard/fetch_scanner.py --if-missing --gitlab-project-id PROJECT_ID
@@ -57,21 +63,38 @@ prompts:
            scanner could not be fetched, with the error.
         2. Run: python3 guard/guard.py run
            It prints a JSON summary and writes details to .ai-stack-guard/.
-        3. If "next" is "nothing to do": skip to step 6.
+        3. If "next" is "nothing to do": skip to step 7.
         4. If "next" starts with "verify failed": do not ship anything. Read .ai-stack-guard/verify.json.
            Use list_issues to look for an open issue titled "AI Stack Guard: automatic upgrade failed
            verification"; if none exists, create it with create_issue, explaining which lines failed and
-           why, with the label ai-stack-guard. Then skip to step 6.
+           why, with the label ai-stack-guard. Then skip to step 7.
         5. Run: python3 guard/guard.py ship
            It opens one merge request per group ("auto" and "review") and prints JSON. For every entry
-           with status "opened", read the file at its notePath with read_file and post that text as a
-           note on its merge request (mergeRequestIid) with create_merge_request_note. Entries with status
-           "already proposed" need nothing.
-        6. Read .ai-stack-guard/issues.json. For each entry, use list_issues to check for an open issue
+           with status "opened" and a mergeRequestIid, read the file at its notePath with read_file and
+           post that text as a note on that merge request with create_merge_request_note. Entries with
+           status "already proposed" need nothing.
+        6. Fallback, only if step 5 exited with an error (for example, the push was refused) or an
+           "opened" entry has no mergeRequestIid. Run: python3 guard/api_ship.py
+           It prepares each group without git and prints JSON. For each group with status "prepared",
+           read its plan file and do this:
+           a. Use gitlab_merge_request_search to look for an open merge request whose source branch is
+              the plan's branch. If there is one, skip to e with it.
+           b. Create the plan's branch with create_branch from startBranch. If the branch already exists
+              (step 5 pushed it), skip to d.
+           c. Use create_commit on that branch with commitMessage and one action per entry in "files":
+              its action ("update" or "create"), its filePath, and as content the text of its readFrom
+              file, copied exactly as read_file returns it.
+           d. Use create_merge_request: source the plan's branch, target targetBranch, and the title,
+              description, labels and remove-source-branch setting from "mergeRequest".
+           e. Read the file at notePath and post that text as a note on the merge request with
+              create_merge_request_note, unless that merge request already has it.
+           Groups with status "nothing to change" need nothing; report their skipped lines.
+        7. Read .ai-stack-guard/issues.json. For each entry, use list_issues to check for an open issue
            with exactly that title. Create it with create_issue (title, description, labels as given) only
            if none exists.
-        7. Give a short final answer in plain text with: each merge request (group, branch, URL, IID),
-           each issue opened or already open, and every skipped line with its reason. Then stop.
+        8. Give a short final answer in plain text with: each merge request (group, branch, URL, IID, and
+           whether it was opened by push or by the API fallback), each issue opened or already open, and
+           every skipped line with its reason. Then stop.
       user: |
         Project ID: {{ project_id }}
         Trigger context: {{ goal }}
@@ -85,6 +108,7 @@ prompts:
       system: |
         You are the second reviewer for AI Stack Guard. You run unattended and never ask questions.
         You check the merge requests the guard just opened, independently of the guard's own claims.
+        If read_file cannot open a file under .ai-stack-guard/, read it with run_command: cat <path>.
 
         1. If the guard's report lists no merge request with a URL or IID, answer "Nothing to review."
            and stop.
@@ -93,6 +117,9 @@ prompts:
            changed and each changed to the planned version, rescans them, and arms auto-merge only for
            the "auto" group and only if that group passed. It writes .ai-stack-guard/review-auto.md and
            .ai-stack-guard/review-review.md.
+           If it stops with a git push error (the arming push was refused), run
+           python3 guard/guard.py review instead. It makes the same checks without arming, so the auto
+           group waits for a human merge; say so in your final answer.
         3. For each group the guard opened, read its review file with read_file and post that text as a
            note on the matching merge request with create_merge_request_note.
         4. Final answer: one line per merge request with passed or failed, and whether auto-merge is
