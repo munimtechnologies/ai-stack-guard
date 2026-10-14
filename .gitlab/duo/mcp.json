@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "ai-stack-guard": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["guard/mcp_server.py"],
+      "approvedTools": ["scan_stack", "plan_upgrades", "component_advisories"]
+    }
+  }
+}

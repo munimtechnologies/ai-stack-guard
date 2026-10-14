@@ -23,6 +23,7 @@ Built for GitLab's *Life After Code* hackathon (Path A: Start Fresh), aiming at 
 | Govern | A second agent, the reviewer, re-checks each pushed branch from a fresh worktree. It confirms that only the planned lines changed, each to the planned text, and that a rescan is clean. **Only a passed review arms auto-merge.** Advisories with no fixed release become issues with mitigations, and ignores in the policy must carry an expiry date. |
 | Release | When a fix merges, its `stack-changes/` entry becomes a tagged GitLab release. |
 | Configure | `ai-stack-guard.json` holds the policy; `.gitlab/duo/agent-config.yml` sets up the flow runtime. |
+| Code | `.gitlab/duo/mcp.json` gives GitLab Duo Agentic Chat in your IDE (or the Duo CLI) three read-only MCP tools, so a developer can ask "is our AI stack safe, and what would the guard change?" before pushing. |
 
 ## The control dial (`ai-stack-guard.json`)
 
@@ -52,6 +53,8 @@ Set `auto_merge` to `none` and every change waits for a human. Leave it at `patc
 - **vLLM v0.30.0 → v0.31.0** is a 0.x minor bump. It goes to the review group, and the MR explains why it needs a human.
 - **Flowise 3.1.4** has advisories with no fixed release. AI Stack Guard opens one issue per advisory with mitigations, and keeps the pipeline green, because no upgrade can help.
 
+The narration and shot list for the demo video are in [`docs/demo-script.md`](docs/demo-script.md).
+
 ## Set it up on your GitLab project
 
 1. Copy `guard/`, `.gitlab/duo/`, `ai-stack-guard.json` and the `ai-stack-scan` job from `.gitlab-ci.yml`. Add `.ai-stack-guard/` and `.ai-stack-advisories/` to `.gitignore`.
@@ -67,14 +70,33 @@ python3 guard/fetch_scanner.py
 python3 guard/guard.py scan      # exit 1 when policy says the pipeline should fail
 python3 guard/guard.py run       # plan, patch, verify; prints what it would ship
 python3 guard/guard.py ship --dry-run
-python3 -m unittest -v test_guard.py
+python3 -m unittest -v test_guard.py test_mcp_server.py
 ```
+
+## Ask about it from your IDE (MCP)
+
+`guard/mcp_server.py` is a small Model Context Protocol server (stdio, standard library only).
+`.gitlab/duo/mcp.json` registers it for GitLab Duo Agentic Chat in VS Code or JetBrains, and for the Duo CLI.
+
+| Tool | What it answers |
+|---|---|
+| `scan_stack` | Which pinned components have known advisories, and which of them would fail the pipeline under your policy. |
+| `plan_upgrades` | The exact edits the flow would make (file, line, from, to, semver size), split into the auto and review groups, plus advisories with no fixed release. |
+| `component_advisories` | Every advisory for one component: severity, fixed versions, summary and link. |
+
+The server is read-only. It never edits files, runs git or pushes; merge requests stay the flow's job.
+It fetches the scanner on first use, the same way the CI job does.
+
+To use it, open the project folder in your IDE. In the top-level group, turn on
+**Settings > GitLab Duo > Allow external MCP tools**, then restart the IDE. If your system has
+`python` but no `python3`, change `command` in `.gitlab/duo/mcp.json`.
 
 ## Limits, plainly
 
 - It compares versions only; it never connects to your servers. To check exposed ports and settings, see [local-ai-checkup](https://github.com/munimv2/local-ai-checkup).
 - A bumped tag keeps any suffix (such as `-cu128`), and suffixed tags never auto-merge, because the new tag may not exist upstream. Digest-pinned lines are skipped and reported.
 - GitLab only lets humans fire flow triggers. Pipelines started by the flow's own pushes never start it again, so it cannot loop.
+- The MCP tools run where your IDE runs. GitLab documents MCP for the IDE and the Duo CLI, so the flow itself uses the scanner directly.
 
 ## Credits
 

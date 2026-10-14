@@ -1,0 +1,14 @@
+Self-hosted AI servers like vLLM, Open WebUI and Flowise ship security fixes every few weeks, and most dependency bots never see them, because they are pinned as Docker images. AI Stack Guard keeps that stack patched, hands-off.
+This demo stack pins three outdated images: Open WebUI 0.11.3, vLLM 0.30.0 and Flowise 3.1.4.
+On every push and on a weekly schedule, the ai-stack-scan job checks each pin against curated advisories plus OSV. Here it finds a critical and a high advisory, so the pipeline fails.
+The same findings show up in the Code Quality widget.
+That failure is the trigger. GitLab starts the AI Stack Guard flow on the Duo Agent Platform, with no human involved.
+The guard agent plans one exact edit per line, applies it, and rescans the patched files before anything is pushed. Every number comes from the scanner, not from the model.
+It opens two merge requests. The Open WebUI patch bump goes to the auto group. The vLLM bump is a minor version on 0.x software, where things break, so it goes to the review group and waits for a person.
+Each merge request starts with an evidence table: file and line, before and after, which advisories it fixes, and what is still open.
+A second agent, the reviewer, checks each branch from a fresh worktree: only the planned lines changed, and the rescan is clean. Only a passed review arms auto-merge.
+Flowise has no fixed release yet, so no upgrade can help. The guard opens one issue per advisory, with mitigations, and keeps the pipeline green.
+When the patch merges, its change note becomes a tagged release. Plan, create, verify, secure, release and monitor are all covered by one flow.
+Developers can ask the same questions from their IDE. A small MCP server gives Duo Chat read-only tools to scan the stack and preview the guard's plan.
+One policy file is the control dial: what fails the pipeline, and how big a bump may merge itself. Set auto-merge to none and every change waits for a human.
+AI Stack Guard is MIT licensed. It is by MV2 of Munim, Inc., made with AI agents. Thanks for watching.
