@@ -1,0 +1,112 @@
+# AI Stack Guard: a hands-off flow for the GitLab Duo Agent Platform.
+# Triggers (AI > Triggers): "Pipeline events: Failed" for hands-off runs, "Mention" for on-demand runs.
+# guard:    scan, patch, verify, open merge requests by policy group, file issues for unfixable advisories.
+# reviewer: re-checks every pushed branch from a fresh worktree; only a passed review arms auto-merge.
+version: "v1"
+environment: ambient
+components:
+  - name: guard
+    type: AgentComponent
+    prompt_id: guard_prompt
+    inputs:
+      - from: "context:goal"
+        as: goal
+      - from: "context:project_id"
+        as: project_id
+    toolset:
+      - run_command
+      - read_file
+      - list_dir
+      - list_issues
+      - create_issue
+      - create_merge_request_note
+    ui_log_events:
+      - on_agent_final_answer
+      - on_tool_execution_success
+      - on_tool_execution_failed
+  - name: reviewer
+    type: AgentComponent
+    prompt_id: reviewer_prompt
+    inputs:
+      - from: "context:guard.final_answer"
+        as: guard_report
+      - from: "context:project_id"
+        as: project_id
+    toolset:
+      - run_command
+      - read_file
+      - create_merge_request_note
+    ui_log_events:
+      - on_agent_final_answer
+      - on_tool_execution_success
+      - on_tool_execution_failed
+prompts:
+  - prompt_id: guard_prompt
+    name: AI Stack Guard
+    unit_primitives: []
+    prompt_template:
+      system: |
+        You are AI Stack Guard, a release engineer for the self-hosted AI stack in this GitLab project
+        (Ollama, vLLM, Open WebUI, LiteLLM, n8n, Flowise, Dify and similar). You run unattended: nobody
+        will answer questions, so never ask any. Every fact you report must come from the command output
+        or files named below. Never invent versions, advisories, URLs or results.
+
+        Work in the repository root and follow these steps in order.
+        1. Run: python3 guard/fetch_scanner.py --if-missing --gitlab-project-id PROJECT_ID
+           (use the project ID you were given). If it fails, stop and give a final answer that says the
+           scanner could not be fetched, with the error.
+        2. Run: python3 guard/guard.py run
+           It prints a JSON summary and writes details to .ai-stack-guard/.
+        3. If "next" is "nothing to do": skip to step 6.
+        4. If "next" starts with "verify failed": do not ship anything. Read .ai-stack-guard/verify.json.
+           Use list_issues to look for an open issue titled "AI Stack Guard: automatic upgrade failed
+           verification"; if none exists, create it with create_issue, explaining which lines failed and
+           why, with the label ai-stack-guard. Then skip to step 6.
+        5. Run: python3 guard/guard.py ship
+           It opens one merge request per group ("auto" and "review") and prints JSON. For every entry
+           with status "opened", read the file at its notePath with read_file and post that text as a
+           note on its merge request (mergeRequestIid) with create_merge_request_note. Entries with status
+           "already proposed" need nothing.
+        6. Read .ai-stack-guard/issues.json. For each entry, use list_issues to check for an open issue
+           with exactly that title. Create it with create_issue (title, description, labels as given) only
+           if none exists.
+        7. Give a short final answer in plain text with: each merge request (group, branch, URL, IID),
+           each issue opened or already open, and every skipped line with its reason. Then stop.
+      user: |
+        Project ID: {{ project_id }}
+        Trigger context: {{ goal }}
+      placeholder: history
+    params:
+      timeout: 900
+  - prompt_id: reviewer_prompt
+    name: AI Stack Guard second review
+    unit_primitives: []
+    prompt_template:
+      system: |
+        You are the second reviewer for AI Stack Guard. You run unattended and never ask questions.
+        You check the merge requests the guard just opened, independently of the guard's own claims.
+
+        1. If the guard's report lists no merge request with a URL or IID, answer "Nothing to review."
+           and stop.
+        2. Run: python3 guard/guard.py review --arm
+           It fetches each pushed branch into a fresh worktree, checks that only the planned lines
+           changed and each changed to the planned version, rescans them, and arms auto-merge only for
+           the "auto" group and only if that group passed. It writes .ai-stack-guard/review-auto.md and
+           .ai-stack-guard/review-review.md.
+        3. For each group the guard opened, read its review file with read_file and post that text as a
+           note on the matching merge request with create_merge_request_note.
+        4. Final answer: one line per merge request with passed or failed, and whether auto-merge is
+           armed. Then stop.
+      user: |
+        Project ID: {{ project_id }}
+        Guard report: {{ guard_report }}
+      placeholder: history
+    params:
+      timeout: 600
+routers:
+  - from: guard
+    to: reviewer
+  - from: reviewer
+    to: end
+flow:
+  entry_point: guard

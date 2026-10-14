@@ -1,0 +1,5 @@
+# Runtime for the AI Stack Guard flow. The default Duo image already has git and Python 3.12.
+# The setup script runs before the network sandbox, so it can fetch the scanner from GitHub;
+# if that fails, the flow falls back to this project's ai-stack-scan artifacts on GitLab.
+setup_script:
+  - python3 guard/fetch_scanner.py --if-missing || echo "scanner fetch deferred to the flow"

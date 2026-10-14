@@ -1,0 +1,9 @@
+{
+  "paths": ["."],
+  "exclude": [".ai-stack-advisories", ".ai-stack-guard"],
+  "block_on": "high",
+  "unfixable_blocks": false,
+  "auto_merge": "patch",
+  "target_branch": "main",
+  "ignore": []
+}

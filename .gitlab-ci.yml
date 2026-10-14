@@ -1,0 +1,62 @@
+# AI Stack Guard pipeline.
+# secure:  scan every pinned self-hosted AI image and package; fail when policy says so.
+#          A failed pipeline is what fires the AI Stack Guard flow (AI > Triggers, "Pipeline events: Failed").
+# verify:  the tool's own tests.
+# release: when a merged fix adds a stack-changes/ entry on the default branch, tag a release from it.
+# monitor: add a weekly pipeline schedule (Build > Pipeline schedules); new advisories then fail it
+#          even when nothing in the repo changed.
+
+stages: [secure, verify, release]
+
+ai-stack-scan:
+  stage: secure
+  image: python:3.12-slim
+  variables:
+    GIT_DEPTH: "0"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git > /dev/null
+    - python3 guard/fetch_scanner.py
+  script:
+    - python3 guard/guard.py scan ${CI_MERGE_REQUEST_DIFF_BASE_SHA:+--changed-since "$CI_MERGE_REQUEST_DIFF_BASE_SHA"}
+  artifacts:
+    when: always
+    expire_in: 90 days
+    paths:
+      - .ai-stack-guard/report.json
+      - .ai-stack-guard/report.md
+      - .ai-stack-advisories/
+    reports:
+      codequality: gl-code-quality-report.json
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+unit-tests:
+  stage: verify
+  image: python:3.12-slim
+  needs: []
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git > /dev/null
+  script:
+    - python3 -m unittest -v test_guard.py
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "schedule"
+
+stack-release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  needs: []
+  script:
+    - ls stack-changes/*.md | sort | tail -n 1 | xargs cat > release-notes.md
+    - cat release-notes.md
+  release:
+    tag_name: stack-$CI_PIPELINE_IID
+    name: "Stack update $CI_PIPELINE_IID"
+    description: ./release-notes.md
+    ref: $CI_COMMIT_SHA
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - stack-changes/*.md

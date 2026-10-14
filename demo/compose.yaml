@@ -1,0 +1,17 @@
+# Demo stack for AI Stack Guard: deliberately outdated pins, so the first pipeline fails and the flow
+# has real work. Open WebUI is a patch bump (auto-merge group), vLLM 0.30 to 0.31 is a 0.x minor bump
+# (review group), and Flowise 3.1.4 has advisories with no fixed release (issues).
+services:
+  vllm:
+    image: vllm/vllm-openai:v0.30.0
+    command: ["--model", "Qwen/Qwen3-0.6B", "--host", "127.0.0.1"]
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.11.3
+    ports:
+      - "127.0.0.1:3000:8080"
+    environment:
+      - OPENAI_API_BASE_URL=http://vllm:8000/v1
+  flowise:
+    image: flowiseai/flowise:3.1.4
+    ports:
+      - "127.0.0.1:3001:3000"

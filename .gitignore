@@ -1,0 +1,5 @@
+.ai-stack-advisories/
+.ai-stack-guard/
+gl-code-quality-report.json
+release-notes.md
+__pycache__/
